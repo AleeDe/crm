@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Mail, Users, Send, TrendingUp, AlertCircle } from 'lucide-react';
+import { Mail, Users, Send, TrendingUp, AlertCircle, Crown } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { toast } from 'sonner';
 
 interface Stats {
   totalCampaigns: number;
@@ -26,6 +27,7 @@ export function OrgDashboard() {
   const [leadStatusData, setLeadStatusData] = useState<any[]>([]);
   const [emailTrendData, setEmailTrendData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingPlan, setUpdatingPlan] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -124,6 +126,29 @@ export function OrgDashboard() {
     }
   };
 
+  const changePlan = async (newPlan: 'free' | 'pro' | 'enterprise') => {
+    if (!organization) return;
+    if (organization.subscription_plan === newPlan) {
+      toast.info('You are already on this plan');
+      return;
+    }
+    setUpdatingPlan(true);
+    try {
+      const { error } = await supabase
+        .from('organizations')
+        .update({ subscription_plan: newPlan })
+        .eq('org_id', organization.org_id);
+      if (error) throw error;
+      setOrganization({ ...organization, subscription_plan: newPlan });
+      toast.success('Plan updated');
+    } catch (e: any) {
+      console.error('Error updating plan', e);
+      toast.error(e.message || 'Failed to update plan');
+    } finally {
+      setUpdatingPlan(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout userRole="ORG">
@@ -163,6 +188,34 @@ export function OrgDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-2">Welcome back, {organization.org_name}</p>
+        </div>
+
+        {/* Plan selector */}
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Crown className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Current Plan</p>
+                <p className="text-xl font-bold text-gray-900 capitalize">{organization.subscription_plan}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-700">Change plan:</label>
+              <select
+                className="px-3 py-2 border rounded-lg"
+                value={organization.subscription_plan}
+                onChange={(e) => changePlan(e.target.value as 'free' | 'pro' | 'enterprise')}
+                disabled={updatingPlan}
+              >
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
