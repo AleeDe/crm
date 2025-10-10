@@ -28,6 +28,7 @@ export function OrgDashboard() {
   const [emailTrendData, setEmailTrendData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingPlan, setUpdatingPlan] = useState(false);
+  // email account UI moved to /org/email
 
   useEffect(() => {
     fetchData();
@@ -83,6 +84,7 @@ export function OrgDashboard() {
       const campaigns = campaignsRes.data || [];
       const leads = leadsRes.data || [];
       const emails = emailsRes.data || [];
+      // email account details handled in EmailAccount page
 
       const activeCampaigns = campaigns.filter((c) => c.status === 'active').length;
       const openedEmails = emails.filter((e) => e.status === 'opened').length;
@@ -149,6 +151,8 @@ export function OrgDashboard() {
     }
   };
 
+  // email account handlers moved to EmailAccount page
+
   if (loading) {
     return (
       <Layout userRole="ORG">
@@ -190,7 +194,7 @@ export function OrgDashboard() {
           <p className="text-gray-600 mt-2">Welcome back, {organization.org_name}</p>
         </div>
 
-        {/* Plan selector */}
+  {/* Plan selector */}
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -217,6 +221,7 @@ export function OrgDashboard() {
             </div>
           </div>
         </div>
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">

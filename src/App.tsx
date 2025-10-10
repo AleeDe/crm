@@ -15,6 +15,7 @@ import { Campaigns } from './pages/org/Campaigns';
 import { Leads } from './pages/org/Leads';
 import { Templates } from './pages/org/Templates';
 import { Agents } from './pages/org/Agents';
+import { EmailAccount } from './pages/org/EmailAccount';
 import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
 
 function AppContent() {
@@ -123,6 +124,14 @@ function AppContent() {
         element={
           <ProtectedRoute allowedRoles={['ORG']}>
             <div className="p-6">Email Logs (Coming Soon)</div>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/org/email"
+        element={
+          <ProtectedRoute allowedRoles={['ORG']}>
+            <EmailAccount />
           </ProtectedRoute>
         }
       />

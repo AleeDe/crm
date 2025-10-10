@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 export function Agents() {
   const { user } = useAuth();
   const [employees, setEmployees] = useState<any[]>([]);
+  const [emailAccounts, setEmailAccounts] = useState<any[]>([]);
+  const [assigning, setAssigning] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -45,6 +47,12 @@ export function Agents() {
         .eq('org_id', orgData.org_id);
 
       setEmployees(data || []);
+      // load email accounts for this org (support multiple accounts later)
+      const { data: accs } = await supabase
+        .from('email_accounts')
+        .select('*')
+        .eq('org_id', orgData.org_id);
+      setEmailAccounts(accs || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {
@@ -183,6 +191,61 @@ export function Agents() {
                 >
                   {emp.status}
                 </span>
+
+                {/* Assign email account */}
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Account</label>
+                  {emailAccounts.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="px-3 py-2 border rounded-lg"
+                        value={assigning === emp.emp_id ? 'saving' : ''}
+                        onChange={async (e) => {
+                          const accountId = e.target.value;
+                          if (!accountId) return;
+                          setAssigning(emp.emp_id);
+                          try {
+                            const { error } = await supabase.rpc('set_employee_email_account', {
+                              p_emp_id: emp.emp_id,
+                              p_email_account_id: accountId,
+                            });
+                            if (error) throw error;
+                            toast.success('Assigned email account');
+                          } catch (err: any) {
+                            toast.error(err.message || 'Failed to assign account');
+                          } finally {
+                            setAssigning('');
+                          }
+                        }}
+                      >
+                        <option value="">Select account</option>
+                        {emailAccounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.from_email || acc.smtp_username}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
+                        onClick={async () => {
+                          try {
+                            const { error } = await supabase.rpc('remove_employee_email_account', {
+                              p_emp_id: emp.emp_id,
+                            });
+                            if (error) throw error;
+                            toast.success('Unassigned email account');
+                          } catch (err: any) {
+                            toast.error(err.message || 'Failed to unassign');
+                          }
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No email account connected. Use Connect Email tab to add one.</p>
+                  )}
+                </div>
               </div>
             </div>
           ))}
