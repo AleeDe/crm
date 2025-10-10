@@ -9,7 +9,10 @@ export function Agents() {
   const { user } = useAuth();
   const [employees, setEmployees] = useState<any[]>([]);
   const [emailAccounts, setEmailAccounts] = useState<any[]>([]);
+  const [aliasesByAccount, setAliasesByAccount] = useState<Record<string, any[]>>({});
   const [assigning, setAssigning] = useState<string>('');
+  const [empAccountMap, setEmpAccountMap] = useState<Record<string, string>>({});
+  const [empAliasMap, setEmpAliasMap] = useState<Record<string, string>>({});
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -53,6 +56,31 @@ export function Agents() {
         .select('*')
         .eq('org_id', orgData.org_id);
       setEmailAccounts(accs || []);
+      // preload aliases for these accounts
+      if (accs && accs.length > 0) {
+        const accountIds = accs.map((a:any) => a.id);
+        const { data: als } = await supabase
+          .from('email_account_aliases')
+          .select('*')
+          .in('account_id', accountIds);
+        const byAcc: Record<string, any[]> = {};
+        (als || []).forEach((al:any) => {
+          byAcc[al.account_id] = byAcc[al.account_id] || [];
+          byAcc[al.account_id].push(al);
+        });
+        setAliasesByAccount(byAcc);
+      }
+
+      // Load current assignments
+      const { data: links } = await supabase
+        .from('employee_email_accounts')
+        .select('emp_id, email_account_id, alias_id')
+        .in('emp_id', (data || []).map((e:any) => e.emp_id));
+      const map: Record<string, string> = {};
+      const aliasMap: Record<string, string> = {};
+      (links || []).forEach((l:any) => { map[l.emp_id] = l.email_account_id; if (l.alias_id) aliasMap[l.emp_id] = l.alias_id; });
+      setEmpAccountMap(map);
+      setEmpAliasMap(aliasMap);
     } catch (error) {
       console.error('Error fetching employees:', error);
     } finally {
@@ -120,39 +148,58 @@ export function Agents() {
 
   return (
     <Layout userRole="ORG">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Agents</h1>
-            <p className="text-gray-600 mt-2">Manage your team members</p>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Agents</h1>
+            <p className="text-gray-600 mt-1">Assign sending identities to your team</p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 transition"
           >
             <Plus className="w-5 h-5" />
             Add Agent
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {employees.map((emp) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+          {employees.map((emp) => {
+            const accountId = empAccountMap[emp.emp_id];
+            const aliasList = accountId ? (aliasesByAccount[accountId] || []) : [];
+            return (
             <div
               key={emp.emp_id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+              className="bg-white/80 backdrop-blur rounded-2xl shadow-lg border border-gray-100 p-6 transition-shadow hover:shadow-xl overflow-hidden"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium text-lg">
-                  {emp.users?.name?.charAt(0).toUpperCase()}
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 ring-4 ring-blue-50 flex items-center justify-center text-white font-semibold text-lg shadow-sm">
+                  {emp.users?.name?.charAt(0)?.toUpperCase()}
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900">{emp.users?.name}</h3>
-                  <p className="text-sm text-gray-600">{emp.designation || 'Agent'}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-900 leading-tight truncate">{emp.users?.name}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">{emp.users?.email}</p>
+                  <div className="mt-2">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-full border ${
+                        emp.status === 'active'
+                          ? 'bg-green-50 text-green-700 border-green-200'
+                          : 'bg-gray-50 text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      {emp.status === 'active' ? (
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                      ) : (
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                      )}
+                      {emp.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <button
                     title="Edit"
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                     onClick={() => {
                       setEditingEmp(emp);
                       setEditForm({ designation: emp.designation || '', status: emp.status || 'active' });
@@ -163,7 +210,7 @@ export function Agents() {
                   </button>
                   <button
                     title="Delete"
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                     onClick={async () => {
                       if (!confirm('Delete this agent?')) return;
                       try {
@@ -180,42 +227,26 @@ export function Agents() {
                   </button>
                 </div>
               </div>
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-sm text-gray-600">{emp.users?.email}</p>
-                <span
-                  className={`inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full ${
-                    emp.status === 'active'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {emp.status}
-                </span>
-
-                {/* Assign email account */}
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Account</label>
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <label className="block text-xs font-semibold text-gray-700 tracking-wide mb-2 uppercase">Email Account</label>
                   {emailAccounts.length > 0 ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3">
                       <select
-                        className="px-3 py-2 border rounded-lg"
-                        value={assigning === emp.emp_id ? 'saving' : ''}
-                        onChange={async (e) => {
+                        className="px-3 py-2.5 border rounded-xl bg-white text-gray-900 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 flex-1 min-w-[220px] w-full"
+                        disabled={assigning === emp.emp_id}
+                        value={empAccountMap[emp.emp_id] || ''}
+                        onChange={(e) => {
                           const accountId = e.target.value;
                           if (!accountId) return;
-                          setAssigning(emp.emp_id);
-                          try {
-                            const { error } = await supabase.rpc('set_employee_email_account', {
-                              p_emp_id: emp.emp_id,
-                              p_email_account_id: accountId,
-                            });
-                            if (error) throw error;
-                            toast.success('Assigned email account');
-                          } catch (err: any) {
-                            toast.error(err.message || 'Failed to assign account');
-                          } finally {
-                            setAssigning('');
+                          // Require alias selection: if no aliases for this account, block and ask to create alias first
+                          const aliases = aliasesByAccount[accountId] || [];
+                          if (aliases.length === 0) {
+                            toast.info('Create an alias for this account first on Connect Email page');
+                            return;
                           }
+                          // Set selection locally; actual save happens when alias is picked
+                          setEmpAccountMap((m) => ({ ...m, [emp.emp_id]: accountId }));
+                          setEmpAliasMap((m) => { const { [emp.emp_id]: _, ...rest } = m; return rest; });
                         }}
                       >
                         <option value="">Select account</option>
@@ -225,14 +256,48 @@ export function Agents() {
                           </option>
                         ))}
                       </select>
+                      {/* Alias selector for selected account */}
+                      {accountId && aliasList.length > 0 ? (
+                          <select
+                            className="px-3 py-2.5 border rounded-xl bg-white text-gray-900 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 flex-1 min-w-[220px] w-full"
+                            value={empAliasMap[emp.emp_id] || ''}
+                            onChange={async (e) => {
+                              const aliasId = e.target.value || null;
+                              setAssigning(emp.emp_id);
+                              try {
+                                const { error } = await supabase.rpc('set_employee_email_account', {
+                                  p_emp_id: emp.emp_id,
+                                  p_email_account_id: accountId,
+                                  p_alias_id: aliasId,
+                                });
+                                if (error) throw error;
+                                setEmpAliasMap((m) => ({ ...m, [emp.emp_id]: aliasId || '' }));
+                                toast.success(aliasId ? 'Alias selected' : 'Alias cleared');
+                              } catch (err: any) {
+                                toast.error(err.message || 'Failed to set alias');
+                              } finally {
+                                setAssigning('');
+                              }
+                            }}
+                          >
+                            <option value="">Select alias</option>
+                            {aliasList.map((al:any) => (
+                              <option key={al.id} value={al.id}>
+                                {al.from_name ? `${al.from_name} <${al.from_email}>` : al.from_email}
+                              </option>
+                            ))}
+                          </select>
+                      ) : null}
                       <button
-                        className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm"
+                        className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 text-sm shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-300/60 sm:ml-auto"
                         onClick={async () => {
                           try {
                             const { error } = await supabase.rpc('remove_employee_email_account', {
                               p_emp_id: emp.emp_id,
                             });
                             if (error) throw error;
+                            setEmpAccountMap((m) => { const { [emp.emp_id]: _, ...rest } = m; return rest; });
+                            setEmpAliasMap((m) => { const { [emp.emp_id]: _, ...rest } = m; return rest; });
                             toast.success('Unassigned email account');
                           } catch (err: any) {
                             toast.error(err.message || 'Failed to unassign');
@@ -241,14 +306,15 @@ export function Agents() {
                       >
                         Clear
                       </button>
+                      <div className="w-full text-xs text-gray-500">Alias is required for agents</div>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-500">No email account connected. Use Connect Email tab to add one.</p>
+                    <p className="text-sm text-gray-500">No email account connected. Use Connect Email to add one.</p>
                   )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {employees.length === 0 && (
             <div className="col-span-full text-center py-12 text-gray-500">

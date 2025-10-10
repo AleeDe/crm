@@ -99,3 +99,46 @@ end;
 $$;
 
 grant execute on function public.delete_email_account_by_id(uuid) to authenticated;
+
+-- Service-only helper to fetch decrypted credentials for a given account id
+-- This is intended to be called from an Edge Function using the service role key
+drop function if exists public.get_email_account_credentials(uuid);
+create or replace function public.get_email_account_credentials(
+  p_id uuid
+)
+returns table (
+  provider text,
+  from_name text,
+  from_email text,
+  smtp_host text,
+  smtp_port int,
+  smtp_username text,
+  smtp_password text,
+  org_id uuid
+)
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  v_key text;
+begin
+  v_key := current_setting('app.settings.encryption_key', true);
+  return query
+  select
+    ea.provider,
+    ea.from_name,
+    ea.from_email,
+    ea.smtp_host,
+    ea.smtp_port,
+    ea.smtp_username,
+    case when coalesce(v_key, '') = '' then null else pgp_sym_decrypt(ea.smtp_password_enc, v_key) end as smtp_password,
+    ea.org_id
+  from public.email_accounts ea
+  where ea.id = p_id;
+end;
+$$;
+
+-- Do not expose to regular authenticated users; service_role only
+grant execute on function public.get_email_account_credentials(uuid) to service_role;
