@@ -30,6 +30,12 @@ export function Campaigns() {
   const [assignedMap, setAssignedMap] = useState<Record<string, any[]>>({});
   const [orgId, setOrgId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [sendModal, setSendModal] = useState<{open: boolean; campaign?: Campaign | null}>({ open: false, campaign: null });
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [sendForm, setSendForm] = useState<{ template_id: string; email_account_id: string; batch: number }>({ template_id: '', email_account_id: '', batch: 10 });
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string>('');
 
   useEffect(() => {
     fetchData();
@@ -48,17 +54,22 @@ export function Campaigns() {
       if (!orgData) return;
       setOrgId(orgData.org_id);
 
-      const [campaignsRes, employeesRes, assignmentsRes] = await Promise.all([
+      const [campaignsRes, employeesRes, assignmentsRes, templatesRes, accountsRes] = await Promise.all([
         supabase.from('campaigns').select('*').eq('org_id', orgData.org_id),
         // Include users.email as a fallback display when name is missing
         supabase.from('employees').select('emp_id, user_id, users(name, email)').eq('org_id', orgData.org_id),
         supabase
           .from('campaign_assignments')
           .select('campaign_id, emp_id, employees!inner(emp_id, user_id, users(name, email))')
+        ,
+        supabase.from('email_templates').select('template_id, name, subject').eq('org_id', orgData.org_id),
+        supabase.from('email_accounts').select('id, from_name, from_email, smtp_username').eq('org_id', orgData.org_id)
       ]);
 
       setCampaigns(campaignsRes.data || []);
       setEmployees(employeesRes.data || []);
+  setTemplates(templatesRes.data || []);
+  setAccounts(accountsRes.data || []);
       const map: Record<string, any[]> = {};
       (assignmentsRes.data || []).forEach((a: any) => {
         map[a.campaign_id] = map[a.campaign_id] || [];
@@ -281,6 +292,16 @@ export function Campaigns() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          <button
+                            onClick={() => {
+                              setSendForm({ template_id: '', email_account_id: '', batch: 10 });
+                              setSendModal({ open: true, campaign });
+                            }}
+                            className="px-3 py-1.5 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                            title="Send bulk emails"
+                          >
+                            Send
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -291,6 +312,109 @@ export function Campaigns() {
           </div>
         </div>
       </div>
+
+      {sendModal.open && sendModal.campaign && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-900">Send Emails - {sendModal.campaign.title}</h2>
+              <button onClick={() => setSendModal({ open: false, campaign: null })} className="text-gray-400 hover:text-gray-600">
+                ×
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {sendError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {sendError}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Template</label>
+                <select
+                  className="w-full px-4 py-2 border rounded-lg"
+                  value={sendForm.template_id}
+                  onChange={(e) => setSendForm({ ...sendForm, template_id: e.target.value })}
+                >
+                  <option value="">Select template</option>
+                  {templates.map((t) => (
+                    <option key={t.template_id} value={t.template_id}>{t.name} — {t.subject}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Account</label>
+                <select
+                  className="w-full px-4 py-2 border rounded-lg"
+                  value={sendForm.email_account_id}
+                  onChange={(e) => setSendForm({ ...sendForm, email_account_id: e.target.value })}
+                >
+                  <option value="">Select account</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.from_email || a.smtp_username}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">How many leads?</label>
+                <input
+                  type="number"
+                  className="w-full px-4 py-2 border rounded-lg"
+                  value={sendForm.batch}
+                  onChange={(e) => setSendForm({ ...sendForm, batch: Math.max(1, parseInt(e.target.value || '1', 10)) })}
+                  min={1}
+                  max={500}
+                />
+                <p className="text-xs text-gray-500 mt-1">Send in small batches first (e.g., 5-10) to protect deliverability.</p>
+              </div>
+            </div>
+            <div className="p-6 flex items-center justify-end gap-3 border-t">
+              <button className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => setSendModal({ open: false, campaign: null })}>Cancel</button>
+              <button
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+                disabled={sending || !sendForm.template_id || !sendForm.email_account_id}
+                onClick={async () => {
+                  if (!sendModal.campaign) return;
+                  setSending(true);
+                  setSendError('');
+                  try {
+                    const { data, error } = await (supabase as any).functions.invoke('send-bulk-emails', {
+                      body: {
+                        campaign_id: sendModal.campaign.campaign_id,
+                        template_id: sendForm.template_id,
+                        email_account_id: sendForm.email_account_id,
+                        batch: sendForm.batch,
+                      },
+                    });
+                    if (error) {
+                      try {
+                        const resp = (error as any).context?.response;
+                        if (resp) {
+                          const text = await resp.text();
+                          try {
+                            const j = JSON.parse(text);
+                            throw new Error(j.error || text);
+                          } catch {
+                            throw new Error(text || error.message || 'Failed');
+                          }
+                        }
+                      } catch {}
+                      throw new Error(error.message || 'Failed');
+                    }
+                    alert(`Sent: ${data.ok} / ${data.total}, failed: ${data.failed}`);
+                    setSendModal({ open: false, campaign: null });
+                  } catch (e: any) {
+                    setSendError(e.message || 'Failed to send');
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+              >
+                {sending ? 'Sending...' : 'Send Now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">

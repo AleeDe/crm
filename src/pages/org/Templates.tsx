@@ -13,6 +13,7 @@ export function Templates() {
     subject: '',
     body_html: '',
   });
+  const insertAtCursor = (value: string) => setFormData((f) => ({ ...f, body_html: f.body_html + value }));
   const [orgId, setOrgId] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -185,6 +186,13 @@ export function Templates() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Body (HTML)
                 </label>
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-gray-600">Merge tags:</span>
+                  {['{{first_name}}','{{full_name}}','{{email}}','{{company}}','{{phone}}'].map(tag => (
+                    <button type="button" key={tag} onClick={() => insertAtCursor(tag)} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">{tag}</button>
+                  ))}
+                  <span className="ml-2 text-gray-400">Tracking pixel and link redirects are added automatically on send.</span>
+                </div>
                 <textarea
                   value={formData.body_html}
                   onChange={(e) => setFormData({ ...formData, body_html: e.target.value })}

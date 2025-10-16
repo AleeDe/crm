@@ -53,6 +53,7 @@ export function Layout({ children, userRole }: LayoutProps) {
           { path: '/org/leads', icon: Users, label: 'Leads' },
           { path: '/org/templates', icon: FileText, label: 'Templates' },
           { path: '/org/agents', icon: UserPlus, label: 'Agents' },
+          { path: '/org/send', icon: Send, label: 'Bulk Send' },
           { path: '/org/email', icon: Plug, label: 'Connect Email' },
           { path: '/org/emails', icon: Send, label: 'Email Logs' },
         ];

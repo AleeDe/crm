@@ -16,6 +16,7 @@ import { Leads } from './pages/org/Leads';
 import { Templates } from './pages/org/Templates';
 import { Agents } from './pages/org/Agents';
 import { EmailAccount } from './pages/org/EmailAccount';
+import Send from './pages/org/Send';
 import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
 
 function AppContent() {
@@ -108,6 +109,14 @@ function AppContent() {
         element={
           <ProtectedRoute allowedRoles={['ORG']}>
             <Templates />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/org/send"
+        element={
+          <ProtectedRoute allowedRoles={['ORG']}>
+            <Send />
           </ProtectedRoute>
         }
       />
